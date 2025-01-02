@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz App</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #upload-section {
+            margin: 20px;
+            padding: 20px;
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #quiz-container {
+            display: flex;
+            justify-content: space-between;
+            width: 80%;
+            margin-top: 20px;
+        }
+
+        #questions-panel,
+        #incorrect-panel {
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #questions-panel {
+            width: 60%;
+        }
+
+        #incorrect-panel {
+            width: 35%;
+            border: 1px solid #dc3545;
+        }
+
+        h2,
+        h3 {
+            color: #343a40;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 10px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #incorrect-panel button {
+            background-color: #dc3545;
+        }
+
+        #incorrect-panel button:hover {
+            background-color: #a71d2a;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            margin: 10px 0;
+            vertical-align: top;
+            float: left;
+        }
+
+        label.correct {
+            background-color: #d4edda;
+        }
+
+        label.incorrect {
+            background-color: #f8d7da;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="upload-section">
+        <h2>Upload Quiz JSON</h2>
+        <input type="file" id="file-input" accept="application/json">
+        <button id="shuffle-btn">Shuffle Questions</button>
+        <button id="chronological-btn">Show Chronologically</button>
+    </div>
+
+    <div id="quiz-container" style="display: none;">
+        <div id="questions-panel">
+            <h3>Questions</h3>
+            <div id="question-display"></div>
+            <button id="prev-btn">Previous</button>
+            <button id="validate-btn">Validate</button>
+            <button id="next-btn">Next</button>
+        </div>
+
+        <div id="incorrect-panel">
+            <h3>Incorrect Answers</h3>
+            <ul id="incorrect-list"></ul>
+        </div>
+    </div>
+
+    <script>
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let incorrectQuestions = [];
+
+        document.getElementById('file-input').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    questions = JSON.parse(e.target.result);
+                    questions.forEach((q, idx) => q.index = idx);
+                    showQuestionsChronologically();
+                    document.getElementById('quiz-container').style.display = 'flex';
+                    displayQuestion();
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        document.getElementById('shuffle-btn').addEventListener('click', function () {
+            shuffleQuestions();
+            displayQuestion();
+        });
+
+        document.getElementById('chronological-btn').addEventListener('click', function () {
+            showQuestionsChronologically();
+            displayQuestion();
+        });
+
+        document.getElementById('next-btn').addEventListener('click', function () {
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                displayQuestion();
+            }
+        });
+
+        document.getElementById('prev-btn').addEventListener('click', function () {
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                displayQuestion();
+            }
+        });
+
+
+        document.getElementById('validate-btn').addEventListener('click', function () {
+            const selectedOptions = Array.from(document.querySelectorAll('input[name="option"]:checked')).map(opt => opt.value);
+
+            const correctAnswers = Array.isArray(questions[currentQuestionIndex].correct)
+                ? questions[currentQuestionIndex].correct
+                : [questions[currentQuestionIndex].correct];
+
+            const options = document.querySelectorAll('input[name="option"]');
+            options.forEach(option => {
+                const parentLabel = option.parentElement;
+                if (correctAnswers.includes(option.value)) {
+                    parentLabel.classList.add('correct');
+                    parentLabel.classList.remove('incorrect');
+                } else if (option.checked) {
+                    parentLabel.classList.add('incorrect');
+                    parentLabel.classList.remove('correct');
+                } else {
+                    parentLabel.classList.remove('correct', 'incorrect');
+                }
+            });
+
+            if (!correctAnswers.every(answer => selectedOptions.includes(answer)) ||
+                !selectedOptions.every(answer => correctAnswers.includes(answer))) {
+                if (!incorrectQuestions.some(q => q.index === currentQuestionIndex)) {
+                    incorrectQuestions.push({
+                        index: currentQuestionIndex
+                    });
+                    updateIncorrectPanel();
+                }
+            }
+        });
+
+        function shuffleQuestions() {
+            questions = questions.sort(() => Math.random() - 0.5);
+            currentQuestionIndex = 0;
+        }
+
+        function showQuestionsChronologically() {
+            questions.sort((a, b) => a.index - b.index);
+            currentQuestionIndex = 0;
+        }
+
+        function displayQuestion() {
+            const questionData = questions[currentQuestionIndex];
+            const questionContainer = document.getElementById('question-display');
+
+            questionContainer.innerHTML = `
+                <p>${questionData.question}</p>
+                ${questionData.options.map(option => `
+                    <label>
+                        <input type="checkbox" name="option" value="${option}">
+                        ${option}
+                    </label><br>
+                `).join('')}
+            `;
+        }
+
+        function updateIncorrectPanel() {
+            const incorrectList = document.getElementById('incorrect-list');
+            incorrectList.innerHTML = incorrectQuestions.map(item => `
+                <li>
+                    <button onclick="goToQuestion(${item.index})">${item.index + 1}</button>
+                </li>
+            `).join('');
+        }
+
+        function goToQuestion(index) {
+            currentQuestionIndex = index;
+            displayQuestion();
+        }
+    </script>
+</body>
+
+</html>
